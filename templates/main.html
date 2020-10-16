@@ -41,7 +41,7 @@
 <body>
     <div class="container">
         <h1 style="text-align: center;">Excel, CSV to MySQL</h1>
-        <form action="" method="post" class="form" role="form">  
+        <form action="" method="post" class="form" role="form" id="my_form" enctype="multipart/form-data">  
             <input type="hidden" name="type_" value="edit">     
             <div class="row">
                 <div class="col-lg-6 col-lg-offset-3">
@@ -175,6 +175,23 @@
                 $(".panel_retrieve").css("display", "none")
             }
         }
+
+        $("#btn_import").click(function() {
+            $("#my_form").attr("action", "/to_mysql/" + $("#db_list").val() + "/" + $("#tbl_name").val());
+            $("#my_form").submit();            
+        });
+
+        $("#f_name").change(function() {
+            if($("#f_name").val() == "") {
+                $("#tbl_name").val("")
+            }else {
+                ss = $("#f_name").val().split("\\")
+                ss = ss[ss.length - 1]
+                f = ss.lastIndexOf(".")
+                file_name = ss.substring(0, f)
+                $("#tbl_name").val(file_name)
+            }
+        });
     </script>
 </body>
 <!-- END: Body-->

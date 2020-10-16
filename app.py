@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-from flask import Flask, render_template, redirect, url_for #, request, flash, g, session
+from flask import Flask, render_template, redirect, url_for
+from flask.globals import request #, request, flash, g, session
 from flask_bootstrap import Bootstrap
 # from models import UserForm, LoginForm
 # from flask_datepicker import datepicker
@@ -10,7 +11,8 @@ from flask_mysqldb import MySQL
 from sqlalchemy_serializer import SerializerMixin
 # import requests
 # from bs4 import BeautifulSoup
-# import os
+from os.path import join, dirname, realpath
+from flask_file_upload.file_upload import FileUpload
 # import pprint
 
 class Config(object):
@@ -20,9 +22,13 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost/information_schema'
 app.config['SECRET_KEY'] = "3489wfksf93r2k3lf9sdjkfe9t2j3krl"
+app.config["UPLOAD_FOLDER"] = join(dirname(realpath(__file__)), "static/uploads")
+app.config["ALLOWED_EXTENSIONS"] = ["csv", "xls", "xlsx", "xlsm"]
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100mb
 
 Bootstrap(app)
 db = SQLAlchemy(app)
+file_upload = FileUpload(app, db)
 
 
 class Schemata(db.Model, SerializerMixin):  
@@ -80,6 +86,14 @@ class Proxies(db.Model, SerializerMixin):
         self.bad = bad
 
 
+@file_upload.Model
+class FileModel(db.Model):
+#    __tablename__ = "blogs"
+   id = db.Column(db.Integer, primary_key=True)
+
+   my_file = file_upload.Column()
+
+
 @app.route('/', methods=['GET', 'POST'])
 def admin():
     return render_template('main.html')
@@ -102,15 +116,35 @@ def get_tbl_list(db_):
         resp += "<option >" + tbl_name.table_name + "</option>"
     return resp
 
-    # $sql = "SELECT table_name FROM TABLES WHERE table_schema='" . $_GET["db"] . "'";
-    # if($result = mysqli_query($link, $sql)) {
-    #     if(mysqli_num_rows($result) > 0) {
-    #         while($row = mysqli_fetch_array($result)){
-    #             $res.="<option >" . $row[0] . "</option>";
-    #         }
-    #         mysqli_free_result($result);
-    #     }
-    # }
+    
+@app.route('/to_mysql/<string:db_name>/<string:tbl_name>', methods=['GET', 'POST'])
+def to_mysql(db_name, tbl_name): 
+    sql = "CREATE TABLE " + db_name + ".`" + tbl_name + "` (`id` int(11) NOT NULL AUTO_INCREMENT,  `a` varchar(20) NOT NULL,  `b` varchar(20) NOT NULL,  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    result = db.engine.execute(sql)
+    
+    # if 'f_name' in request.files:
+    #     u_file = request.files['f_name']
+    #     if u_file.filename != '':            
+    #         u_file.save(join(dirname(realpath(__file__)), "static\\upload", u_file.filename))
+    #         print("##" + request.form["tbl_name"] + "##")
+    #         # request.form["tbl_name"] == "" :
+
+
+    # def category_init_func(row):
+    #     c = Category(row['name'])
+    #     c.id = row['id']
+    #     return c
+    # def post_init_func(row):
+    #     c = Category.query.filter_by(name=row['category']).first()
+    #     p = Post(row['title'], row['body'], c, row['pub_date'])
+    #     return p
+    request.save_book_to_database(
+        field_name='f_name', session=db.session,
+        tables=[],
+        initializers=[])
+    return redirect(url_for('admin'), code=302)
+
+
 
 # @app.route('/login', methods = ['POST', 'GET'])
 # def login():
