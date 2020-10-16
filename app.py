@@ -28,12 +28,25 @@ db = SQLAlchemy(app)
 class Schemata(db.Model, SerializerMixin):  
     __tablename__ = 'schemata'
 
-    # serialize_only = ('schema_name')
+    serialize_only = ('schema_name')
     
     schema_name =  db.Column(db.String(64), nullable = False, primary_key=True)
 
     def __init__(self, schema_name):
         self.schema_name = schema_name
+
+
+class Tables(db.Model, SerializerMixin):  
+    __tablename__ = 'TABLES'
+
+    serialize_only = ('table_name', 'table_schema')
+    
+    table_name =  db.Column(db.String(64), nullable = False, primary_key=True)
+    table_schema =  db.Column(db.String(64), nullable = False)
+
+    def __init__(self, table_name, table_schema):
+        self.table_name = table_name
+        self.table_schema = table_schema
 
 
 class PostalCode(db.Model, SerializerMixin):  
@@ -78,10 +91,18 @@ def get_db_list():
     resp = ""
     for db_name in db_list:
         resp += "<option >" + db_name.schema_name + "</option>"
-    print("resp = " + resp)
     return resp
 
-    # $sql = "SELECT schema_name FROM schemata WHERE schema_name NOT IN ('information_schema', 'mysql', 'performance_schema')";
+
+@app.route('/get_tbl_list/<string:db_>', methods=['GET', 'POST'])
+def get_tbl_list(db_): 
+    tbl_list = Tables.query.filter_by(table_schema=db_).all()
+    resp = ""
+    for tbl_name in tbl_list:
+        resp += "<option >" + tbl_name.table_name + "</option>"
+    return resp
+
+    # $sql = "SELECT table_name FROM TABLES WHERE table_schema='" . $_GET["db"] . "'";
     # if($result = mysqli_query($link, $sql)) {
     #     if(mysqli_num_rows($result) > 0) {
     #         while($row = mysqli_fetch_array($result)){
@@ -90,7 +111,6 @@ def get_db_list():
     #         mysqli_free_result($result);
     #     }
     # }
-    # echo $res; 
 
 # @app.route('/login', methods = ['POST', 'GET'])
 # def login():
