@@ -2,20 +2,13 @@
 from flask import Flask, render_template, redirect, url_for
 from flask.globals import request #, request, flash, g, session
 from flask_bootstrap import Bootstrap
-# from models import UserForm, LoginForm
-# from flask_datepicker import datepicker
 from flask_sqlalchemy import SQLAlchemy
 from flask_mysqldb import MySQL
-# import json
-# from proxy import MyThread, proxy_status, proxies_list
 from sqlalchemy_serializer import SerializerMixin
-# import requests
-# from bs4 import BeautifulSoup
 from os.path import join, dirname, realpath
 from flask_file_upload.file_upload import FileUpload
 import xlrd
-# import MySQLdb
-# import pprint
+import csv
 
 class Config(object):
     SECRET_KEY = '78w0o5tuuGex5Ktk8VvVDF9Pw3jv1MVE'
@@ -104,9 +97,6 @@ def admin():
 def msg(msg=""):
     return render_template('main.html', msg=msg)
 
-# def msg(msg):
-    # return render_template('main.html', msg=msg)
-
 
 @app.route('/get_db_list', methods=['POST'])
 def get_db_list(): 
@@ -135,32 +125,57 @@ def to_mysql(db_name, tbl_name):
         if u_file.filename != '':       
             file_path = join(dirname(realpath(__file__)), "static\\upload", u_file.filename)     
             u_file.save(file_path)
+            file_ext = u_file.filename[-3:]
+            if file_ext.lower() == "csv":
+                with open(file_path, 'r') as in_file:
+                    csv_file = csv.DictReader(in_file)
+                    col_count = len(csv_file.fieldnames)
+                    for c in csv_file.fieldnames:
+                        sql += " `" + c + "` varchar(20) NOT NULL,  "
+                        sql_2 += " `" + c + "`, " 
 
-            book = xlrd.open_workbook(file_path)
-            sheet = book.sheet_by_index(0)
+                    sql = sql[:-2] + "  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+                    sql_2 = sql_2[:-2] + ") VALUES (" + "%s, " * col_count
+                    sql_2 = sql_2[:-2] + ")"
+                    result = db.engine.execute(sql)
 
-            # Create Database
-            for c in range(sheet.ncols):
-                cell_val = sheet.cell(0, c).value                
-                if cell_val == "": 
-                    col_count = c
-                    break
 
-                sql += " `" + cell_val + "` varchar(20) NOT NULL,  "
-                sql_2 += " `" + cell_val + "`, " 
+                    first_row = True
+                    for row in csv_file:
+                        if first_row:
+                            first_row = False
+                            continue
+                        val_arr = []
+                        for c in row:
+                            val_arr.append(str(row[c]))
 
-            sql = sql[:-2] + "  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-            sql_2 = sql_2[:-2] + ") VALUES (" + "%s, " * col_count
-            sql_2 = sql_2[:-2] + ")"
-            result = db.engine.execute(sql)
+                        db.engine.execute(sql_2, tuple(val_arr))
+            else:
+                book = xlrd.open_workbook(file_path)
+                sheet = book.sheet_by_index(0)
+                col_count = sheet.ncols
+                # Create Database
+                for c in range(sheet.ncols):
+                    cell_val = sheet.cell(0, c).value                
+                    if cell_val == "": 
+                        col_count = c
+                        break
 
-            # Insert Data
-            for r in range(1, sheet.nrows):
-                val_arr = []
-                for c in range(col_count):
-                    val_arr.append(str(sheet.cell(r,c).value))
+                    sql += " `" + cell_val + "` varchar(20) NOT NULL,  "
+                    sql_2 += " `" + cell_val + "`, " 
 
-                db.engine.execute(sql_2, tuple(val_arr))
+                sql = sql[:-2] + "  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+                sql_2 = sql_2[:-2] + ") VALUES (" + "%s, " * col_count
+                sql_2 = sql_2[:-2] + ")"
+                result = db.engine.execute(sql)
+
+                # Insert Data
+                for r in range(1, sheet.nrows):
+                    val_arr = []
+                    for c in range(col_count):
+                        val_arr.append(str(sheet.cell(r,c).value))
+
+                    db.engine.execute(sql_2, tuple(val_arr))
             
             return redirect(url_for('msg', msg="Successfuly insert into MySQL."))
 
