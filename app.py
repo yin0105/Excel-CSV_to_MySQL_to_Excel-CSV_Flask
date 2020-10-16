@@ -1,14 +1,17 @@
 #!/usr/bin/env python
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, Response
 from flask.globals import request #, request, flash, g, session
 from flask_bootstrap import Bootstrap
 from flask_sqlalchemy import SQLAlchemy
 from flask_mysqldb import MySQL
+from sqlalchemy.sql.schema import Column
 from sqlalchemy_serializer import SerializerMixin
 from os.path import join, dirname, realpath
 from flask_file_upload.file_upload import FileUpload
-import xlrd
+import xlrd, xlwt
 import csv
+import io
+
 
 class Config(object):
     SECRET_KEY = '78w0o5tuuGex5Ktk8VvVDF9Pw3jv1MVE'
@@ -48,6 +51,21 @@ class Tables(db.Model, SerializerMixin):
     def __init__(self, table_name, table_schema):
         self.table_name = table_name
         self.table_schema = table_schema
+
+
+class Columns(db.Model, SerializerMixin):  
+    __tablename__ = 'COLUMNS'
+
+    serialize_only = ('column_name', 'table_name', 'table_schema')
+    
+    column_name =  db.Column(db.String(64), nullable = False, primary_key=True)
+    table_name =  db.Column(db.String(64), nullable = False)
+    table_schema =  db.Column(db.String(64), nullable = False)
+
+    def __init__(self, column_name, table_name, table_schema):
+        self.column_name = column_name
+        self.table_name = table_name
+        self.table_schema = table_schema        
 
 
 class PostalCode(db.Model, SerializerMixin):  
@@ -178,6 +196,71 @@ def to_mysql(db_name, tbl_name):
                     db.engine.execute(sql_2, tuple(val_arr))
             
             return redirect(url_for('msg', msg="Successfuly insert into MySQL."))
+
+
+@app.route('/to_excel/<string:db_name>/<string:tbl_name>', methods=['GET', 'POST'])
+def to_excel(db_name, tbl_name):
+    col_list = Columns.query.filter(Columns.table_schema==db_name, Columns.table_name==tbl_name).all()
+	
+    output = io.BytesIO()
+	
+    #create WorkBook object
+    workbook = xlwt.Workbook()
+	
+    #add a sheet
+    sh = workbook.add_sheet('Sheet1')
+    col_index = 0
+    sql = "SELECT "
+    for col in col_list:
+        # print(col.column_name)	
+        if col.column_name != "id":	
+            sh.write(0, col_index, col.column_name)
+            sql += "`" + col.column_name + "`, "
+            col_index += 1
+    sql = sql[:-2] + " FROM " + db_name + ".`" + tbl_name + "`"
+    print("sql= " + sql)
+    result = db.engine.execute(sql)
+    r = 0
+    for row in result:
+        r += 1
+        c = 0
+        for cell in row:
+            sh.write(r, c, cell)
+            c += 1
+
+	#add headers
+
+    workbook.save(output)
+    output.seek(0)
+
+    return Response(output, mimetype="application/ms-excel", headers={"Content-Disposition":"attachment;filename=" + tbl_name + ".xls"})
+    
+    
+    # $sql = "SELECT column_name FROM COLUMNS WHERE table_schema='" . $_GET["db"] . "' AND table_name='" . $_GET["tbl"] . "'";
+    # if($result = mysqli_query($link, $sql)) {
+    #     if(mysqli_num_rows($result) > 0) {
+    #         while($row = mysqli_fetch_array($result)){
+    #             $res.='<div class="list-group-item"><label><input type="checkbox"><span class="list-group-item-text">&nbsp;&nbsp;&nbsp;' . $row[0] . '</span></label></div>';
+    #         }
+    #         mysqli_free_result($result);
+    #     }
+    # }
+
+
+
+@app.route('/to_csv/<string:db_name>/<string:tbl_name>', methods=['GET', 'POST'])
+def to_csv(db_name, tbl_name):
+    pass
+
+
+
+
+
+
+
+
+
+
 
 
     # def category_init_func(row):

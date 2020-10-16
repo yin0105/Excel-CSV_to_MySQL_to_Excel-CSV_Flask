@@ -147,7 +147,6 @@
                     success: function (result) { 
                         console.log("success");
                         $("#tbl_list").html(result);
-                        // get_col_list();
                     },
                     error: function (error) {
                             
@@ -191,6 +190,12 @@
                 file_name = ss.substring(0, f)
                 $("#tbl_name").val(file_name)
             }
+        });
+
+        $("#btn_retrieve").click(function() {
+            $("#my_form").attr("action", "/" + $("input[name='to_file']:checked").prop("id") + "/" + $("#db_list").val() + "/" + $("#tbl_list").val());
+            $("#my_form").submit();            
+            console.log($("input[name='to_file']:checked").prop("id"))
         });
     </script>
 </body>
