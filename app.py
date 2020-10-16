@@ -13,6 +13,8 @@ from sqlalchemy_serializer import SerializerMixin
 # from bs4 import BeautifulSoup
 from os.path import join, dirname, realpath
 from flask_file_upload.file_upload import FileUpload
+import xlrd
+# import MySQLdb
 # import pprint
 
 class Config(object):
@@ -88,7 +90,6 @@ class Proxies(db.Model, SerializerMixin):
 
 @file_upload.Model
 class FileModel(db.Model):
-#    __tablename__ = "blogs"
    id = db.Column(db.Integer, primary_key=True)
 
    my_file = file_upload.Column()
@@ -96,7 +97,15 @@ class FileModel(db.Model):
 
 @app.route('/', methods=['GET', 'POST'])
 def admin():
-    return render_template('main.html')
+    return redirect(url_for('msg', msg=""))
+
+
+@app.route('/msg', methods=['GET', 'POST'])
+def msg(msg=""):
+    return render_template('main.html', msg=msg)
+
+# def msg(msg):
+    # return render_template('main.html', msg=msg)
 
 
 @app.route('/get_db_list', methods=['POST'])
@@ -119,15 +128,41 @@ def get_tbl_list(db_):
     
 @app.route('/to_mysql/<string:db_name>/<string:tbl_name>', methods=['GET', 'POST'])
 def to_mysql(db_name, tbl_name): 
-    sql = "CREATE TABLE " + db_name + ".`" + tbl_name + "` (`id` int(11) NOT NULL AUTO_INCREMENT,  `a` varchar(20) NOT NULL,  `b` varchar(20) NOT NULL,  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    result = db.engine.execute(sql)
-    
-    # if 'f_name' in request.files:
-    #     u_file = request.files['f_name']
-    #     if u_file.filename != '':            
-    #         u_file.save(join(dirname(realpath(__file__)), "static\\upload", u_file.filename))
-    #         print("##" + request.form["tbl_name"] + "##")
-    #         # request.form["tbl_name"] == "" :
+    sql = "CREATE TABLE " + db_name + ".`" + tbl_name + "` (`id` int(11) NOT NULL AUTO_INCREMENT,  "
+    sql_2 = "INSERT INTO " + db_name + ".`" + tbl_name + "`  ("
+    if 'f_name' in request.files:
+        u_file = request.files['f_name']
+        if u_file.filename != '':       
+            file_path = join(dirname(realpath(__file__)), "static\\upload", u_file.filename)     
+            u_file.save(file_path)
+
+            book = xlrd.open_workbook(file_path)
+            sheet = book.sheet_by_index(0)
+
+            # Create Database
+            for c in range(sheet.ncols):
+                cell_val = sheet.cell(0, c).value                
+                if cell_val == "": 
+                    col_count = c
+                    break
+
+                sql += " `" + cell_val + "` varchar(20) NOT NULL,  "
+                sql_2 += " `" + cell_val + "`, " 
+
+            sql = sql[:-2] + "  PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            sql_2 = sql_2[:-2] + ") VALUES (" + "%s, " * col_count
+            sql_2 = sql_2[:-2] + ")"
+            result = db.engine.execute(sql)
+
+            # Insert Data
+            for r in range(1, sheet.nrows):
+                val_arr = []
+                for c in range(col_count):
+                    val_arr.append(str(sheet.cell(r,c).value))
+
+                db.engine.execute(sql_2, tuple(val_arr))
+            
+            return redirect(url_for('msg', msg="Successfuly insert into MySQL."))
 
 
     # def category_init_func(row):
@@ -138,11 +173,11 @@ def to_mysql(db_name, tbl_name):
     #     c = Category.query.filter_by(name=row['category']).first()
     #     p = Post(row['title'], row['body'], c, row['pub_date'])
     #     return p
-    request.save_book_to_database(
-        field_name='f_name', session=db.session,
-        tables=[],
-        initializers=[])
-    return redirect(url_for('admin'), code=302)
+    # request.save_book_to_database(
+    #     field_name='f_name', session=db.session,
+    #     tables=[],
+    #     initializers=[])
+    # return redirect(url_for('admin'), code=302)
 
 
 
