@@ -18,7 +18,7 @@ class Config(object):
 
 app = Flask(__name__)
 app.config.from_object(Config)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost/information_schema'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:@localhost/'
 app.config['SECRET_KEY'] = "3489wfksf93r2k3lf9sdjkfe9t2j3krl"
 app.config["UPLOAD_FOLDER"] = join(dirname(realpath(__file__)), "static/uploads")
 app.config["ALLOWED_EXTENSIONS"] = ["csv", "xls", "xlsx", "xlsm"]
@@ -118,19 +118,24 @@ def msg(msg=""):
 
 @app.route('/get_db_list', methods=['POST'])
 def get_db_list(): 
-    db_list = Schemata.query.filter(~Schemata.schema_name.in_(['information_schema', 'mysql', 'performance_schema'])).all()
+    # db_list = Schemata.query.filter(~Schemata.schema_name.in_(['information_schema', 'mysql', 'performance_schema'])).all()
+    db_list = db.engine.execute("SHOW DATABASES")
     resp = ""
     for db_name in db_list:
-        resp += "<option >" + db_name.schema_name + "</option>"
+        if db_name.Database in ['information_schema', 'mysql', 'performance_schema'] : continue
+        resp += "<option >" + db_name.Database + "</option>"
     return resp
 
 
 @app.route('/get_tbl_list/<string:db_>', methods=['GET', 'POST'])
 def get_tbl_list(db_): 
-    tbl_list = Tables.query.filter_by(table_schema=db_).all()
+    # tbl_list = Tables.query.filter_by(table_schema=db_).all()
+    db.engine.execute("USE " + db_)
+    tbl_list = db.engine.execute("SHOW TABLES")
     resp = ""
-    for tbl_name in tbl_list:
-        resp += "<option >" + tbl_name.table_name + "</option>"
+    for row in tbl_list:
+        for tbl_name in row:
+            resp += "<option >" + tbl_name + "</option>"
     return resp
 
     
@@ -201,7 +206,8 @@ def to_mysql(db_name, tbl_name):
 
 @app.route('/to_excel/<string:db_name>/<string:tbl_name>', methods=['GET', 'POST'])
 def to_excel(db_name, tbl_name):
-    col_list = Columns.query.filter(Columns.table_schema==db_name, Columns.table_name==tbl_name).all()
+    # col_list = Columns.query.filter(Columns.table_schema==db_name, Columns.table_name==tbl_name).all()
+    col_list = db.engine.execute("SHOW COLUMNS FROM " + db_name + ".`" + tbl_name + "`")
     output = io.BytesIO()
 	
     #create WorkBook object
@@ -212,10 +218,9 @@ def to_excel(db_name, tbl_name):
     col_index = 0
     sql = "SELECT "
     for col in col_list:
-        # print(col.column_name)	
-        if col.column_name != "id":	
-            sh.write(0, col_index, col.column_name)
-            sql += "`" + col.column_name + "`, "
+        if col.Field != "id":	
+            sh.write(0, col_index, col.Field)
+            sql += "`" + col.Field + "`, "
             col_index += 1
     sql = sql[:-2] + " FROM " + db_name + ".`" + tbl_name + "`"
     print("sql= " + sql)
@@ -238,28 +243,18 @@ def to_excel(db_name, tbl_name):
 
 @app.route('/to_csv/<string:db_name>/<string:tbl_name>', methods=['GET', 'POST'])
 def to_csv(db_name, tbl_name):
-    col_list = Columns.query.filter(Columns.table_schema==db_name, Columns.table_name==tbl_name).all()
+    # col_list = Columns.query.filter(Columns.table_schema==db_name, Columns.table_name==tbl_name).all()
+    col_list = db.engine.execute("SHOW COLUMNS FROM " + db_name + ".`" + tbl_name + "`")
     output = io.StringIO()	
     writer = csv.writer(output)
-		
-		# line = ['Emp Id, Emp First Name, Emp Last Name, Emp Designation']
-		# writer.writerow(line)
-
-		# for row in result:
-		# 	line = [str(row['emp_id']) + ',' + row['emp_first_name'] + ',' + row['emp_last_name'] + ',' + row['emp_designation']]
-		# 	writer.writerow(line)
-
-
-
 	
     #add a sheet
     sql = "SELECT "
     col_arr = []
     for col in col_list:
-        # print(col.column_name)	
-        if col.column_name != "id":	
-            col_arr.append(col.column_name)
-            sql += "`" + col.column_name + "`, "
+        if col.Field != "id":	
+            col_arr.append(col.Field)
+            sql += "`" + col.Field + "`, "
     writer.writerow(col_arr)
     sql = sql[:-2] + " FROM " + db_name + ".`" + tbl_name + "`"
     result = db.engine.execute(sql)
